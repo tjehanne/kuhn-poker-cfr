@@ -1,69 +1,29 @@
-/* HEADER HERO */
+/* ======================= HEADER HERO ======================= */
 .hero {
     background: linear-gradient(90deg, #1e3c72, #2a5298);
     color: white;
     text-align: center;
-    padding: 60px 20px;
+    padding: 30px 20px;
 }
 
 .hero h1 {
     font-size: 3em;
-    margin-bottom: 20px;
+    margin: 0;
 }
 
 .hero p {
     font-size: 1.2em;
 }
 
-/* SECTION CARDS */
-.overview {
-    display: flex;
-    justify-content: center;
-    gap: 30px;
-    flex-wrap: wrap;
-    padding: 40px 20px;
-}
-
-.card {
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    padding: 20px;
-    width: 320px;
-    text-align: center;
-}
-
-.card h2 {
-    margin-bottom: 10px;
-}
-
-.card p {
-    margin: 15px 0;
-}
-
-.card .btn {
-    display: inline-block;
-    padding: 10px 20px;
-    background: #222;
-    color: white;
-    text-decoration: none;
-    border-radius: 6px;
-    transition: background 0.3s;
-}
-
-.card .btn:hover {
-    background: #444;
-}
-
+/* ======================= BODY ET NAVBAR ======================= */
 body {
     margin: 0;
     font-family: sans-serif;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    min-height: 100vh;
 }
 
-/* Navbar */
 .navbar {
     display: flex;
     justify-content: space-between;
@@ -89,23 +49,94 @@ body {
     text-decoration: underline;
 }
 
-/* Contenu principal */
-#main-content {
+/* ======================= SECTION CARDS / TABLEAUX ======================= */
+.overview {
     display: flex;
-    flex-direction: row;
-    flex: 1 1 auto;
-    overflow: auto;
-    padding: 10px;
+    justify-content: center;
+    gap: 30px;
+    flex-wrap: wrap;
+    padding: 40px 20px;
 }
 
-/* Plateau + Graphe */
+.card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    padding: 20px;
+    text-align: center;
+}
+
+.card.full-width {
+    width: 100%;
+    max-width: 1600px; /* assez large pour tableau complet */
+    margin: 0 auto;    /* centrer horizontalement */
+}
+
+.card h2 {
+    margin-bottom: 10px;
+}
+
+.card p {
+    margin: 15px 0;
+}
+
+.card .btn {
+    display: inline-block;
+    padding: 10px 20px;
+    background: #222;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: background 0.3s;
+}
+
+.card .btn:hover {
+    background: #444;
+}
+
+/* ======================= TABLEAUX ======================= */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1.3em;
+    margin: 0 auto; /* centrer le tableau */
+}
+
+th, td {
+    border: 2px solid black;
+    padding: 20px;
+    text-align: center;
+    vertical-align: middle;
+    min-width: 180px;
+    line-height: 1.5em;
+}
+
+thead th {
+    background-color: #f0f0f0;
+}
+
+td br {
+    margin-bottom: 5px;
+}
+
+/* ======================= CONTENU PRINCIPAL ======================= */
+#main-content {
+    display: flex;
+    flex: 1 1 auto;
+    padding: 10px;
+    flex-wrap: wrap; /* pour adaptation responsive */
+    justify-content: center; /* centre les contenus horizontalement */
+    gap: 20px;
+}
+
+/* ======================= PLATEAU + GRAPHE ======================= */
 #left-panel {
-    flex: 2;
     display: flex;
     flex-direction: row;
     align-items: flex-start;
     justify-content: flex-start;
-    gap: 10px; /* espace entre plateau et graphe */
+    gap: 10px;
+    flex-wrap: wrap; /* responsive si petit écran */
 }
 
 #left-panel canvas {
@@ -115,9 +146,8 @@ body {
     margin: 10px;
 }
 
-/* Contrôles */
+/* ======================= CONTROLES ======================= */
 #controls {
-    flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -127,13 +157,16 @@ body {
 
 #controls span {
     display: inline-block;
-    width: 2ch;       /* largeur fixe pour deux chiffres */
-    text-align: right; /* alignement à droite pour les nombres */
-    font-family: monospace; /* optionnel : chiffres alignés */
+    width: 2ch;
+    text-align: right;
+    font-family: monospace;
 }
 
 label {
     margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 input[type=range] {
