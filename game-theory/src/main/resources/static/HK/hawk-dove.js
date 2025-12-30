@@ -93,10 +93,9 @@ function createCreature(species, angle) {
     startY: y,
     target: null,
     food: 0,
-    hawksMemory:
-        species === Species.GRUDGE || species === Species.DETECTIVE
-            ? new Set()
-            : null,
+    // Mémoire spécifique à chaque type
+    hawksMemory: species === Species.GRUDGE ? new Set() : null,
+    doveMemory: species === Species.DETECTIVE ? new Set() : null,
     round: species === Species.DETECTIVE ? 0 : null,
     someoneCheated: species === Species.DETECTIVE ? false : null
   };
@@ -112,7 +111,7 @@ function generateFoodPairs() {
     { r: 160, pairs: 6 },
     { r: 220, pairs: 8 }
   ];
-  const offset = 10; // décalage perpendiculaire pour 2 boules
+  const offset = 10;
 
   config.forEach(({ r, pairs }) => {
     for (let i = 0; i < pairs; i++) {
@@ -120,7 +119,6 @@ function generateFoodPairs() {
       const cx = center.x + r * Math.cos(a);
       const cy = center.y + r * Math.sin(a);
 
-      // vecteur perpendiculaire au rayon
       const dirX = cx - center.x;
       const dirY = cy - center.y;
       const dist = Math.hypot(dirX, dirY);
@@ -171,7 +169,6 @@ function initCreatures(h, d, g, det) {
   draw();
 }
 
-
 /*********************************************************
  * DESSIN
  *********************************************************/
@@ -209,7 +206,7 @@ function draw() {
 }
 
 /*********************************************************
- * ASSIGNATION AUX PAIRES (sur le rayon centre → paire)
+ * ASSIGNATION AUX PAIRES
  *********************************************************/
 function assignTargets() {
   foods.forEach(p => p.assigned = []);
@@ -222,15 +219,13 @@ function assignTargets() {
     const p = free[Math.floor(Math.random() * free.length)];
     p.assigned.push(c);
 
-    // vecteur radial centre → centre de la paire
     const dx = p.cx - center.x;
     const dy = p.cy - center.y;
     const dist = Math.hypot(dx, dy);
     const dirX = dx / dist;
     const dirY = dy / dist;
 
-    // position sur le rayon + sideOffset
-    const radialOffset = p.assigned.length === 1 ? -16 : 16; // première devant, deuxième derrière
+    const radialOffset = p.assigned.length === 1 ? -16 : 16;
     const tx = center.x + dirX * (p.r + radialOffset);
     const ty = center.y + dirY * (p.r + radialOffset);
 
@@ -267,25 +262,31 @@ function animateMove(speed = 4) {
  * COMPORTEMENT ALIMENTAIRE
  *********************************************************/
 function behavesAsHawk(c, other) {
+  if (!other) return false;
+
   if (c.species === Species.HAWK) return true;
   if (c.species === Species.DOVE) return false;
-  if (c.species === Species.DETECTIVE) {
-    if (c.round < 4) {
-      return [false, true, false, false][c.round];
-    }
-    if (!c.someoneCheated) return true; // exploitation
-    return other && c.hawksMemory?.has(other.id);
-  }
-  // Pour une Grudge, vérifier que le Hawk est vivant avant de considérer qu'il se comporte comme un Hawk
-  if (c.species === Species.GRUDGE && other) {
-    // Filtrer la mémoire pour ne garder que les Hawks encore présents
+
+  // Grudge : se comporte comme Hawk uniquement face aux créatures mémorisées
+  if (c.species === Species.GRUDGE) {
+    // Nettoyage : retirer les IDs morts
     c.hawksMemory = new Set([...c.hawksMemory].filter(id => creatures.some(h => h.id === id)));
     return c.hawksMemory.has(other.id);
+  }
+
+  // Detective : se comporte comme Hawk uniquement face aux créatures mémorisées
+  if (c.species === Species.DETECTIVE) {
+    // Nettoyage : retirer les IDs morts
+    c.doveMemory = new Set([...c.doveMemory].filter(id => creatures.some(h => h.id === id)));
+    return c.doveMemory.has(other.id);
   }
 
   return false;
 }
 
+/*********************************************************
+ * MANGER — mise à jour mémoire Grudge/Detective
+ *********************************************************/
 function eatPair(pair) {
   if (pair.eaten) return;
   const assigned = pair.assigned;
@@ -298,41 +299,21 @@ function eatPair(pair) {
     const ha = behavesAsHawk(a, b);
     const hb = behavesAsHawk(b, a);
 
-    // Detective observe
-    if (a.species === Species.DETECTIVE && hb) {
-      a.someoneCheated = true;
-      a.hawksMemory ??= new Set();
-      a.hawksMemory.add(b.id);
-    }
-    if (b.species === Species.DETECTIVE && ha) {
-      b.someoneCheated = true;
-      b.hawksMemory ??= new Set();
-      b.hawksMemory.add(a.id);
-    }
+    // Detective mémorise les créatures pacifiques
+    if (a.species === Species.DETECTIVE && !ha) a.doveMemory.add(b.id);
+    if (b.species === Species.DETECTIVE && !hb) b.doveMemory.add(a.id);
 
-    //repartition de la nourriture
-    if (ha && hb) {
-      // Hawk vs Hawk ou Grudge déjà rencontré → 0:0
-      a.food = 0;
-      b.food = 0;
-    } else if (ha && !hb) {
-      // a = Hawk, b = Dove/Grudge
-      a.food = 1.5;
-      b.food = 0.5;
-      if (b.species === Species.GRUDGE && !b.hawksMemory.has(a.id)) b.hawksMemory.add(a.id);
-    } else if (!ha && hb) {
-      // b = Hawk, a = Dove/Grudge
-      a.food = 0.5;
-      b.food = 1.5;
-      if (a.species === Species.GRUDGE && !a.hawksMemory.has(b.id)) a.hawksMemory.add(b.id);
-    } else {
-      // Dove vs Dove ou Grudge vs Dove → 1:1
-      a.food = 1;
-      b.food = 1;
-    }
+    // Grudge mémorise les créatures agressives
+    if (a.species === Species.GRUDGE && hb) a.hawksMemory.add(b.id);
+    if (b.species === Species.GRUDGE && ha) b.hawksMemory.add(a.id);
+
+    // Distribution de la nourriture
+    if (ha && hb) { a.food = 0; b.food = 0; }
+    else if (ha && !hb) { a.food = 1.5; b.food = 0.5; }
+    else if (!ha && hb) { a.food = 0.5; b.food = 1.5; }
+    else { a.food = 1; b.food = 1; }
   }
 
-  // Marquer les items comme mangés
   pair.items.forEach(f => f.eaten = true);
   pair.eaten = true;
 }
@@ -358,11 +339,7 @@ async function animateReposition(next) {
       });
       draw();
       if (done) {
-        // Mettre à jour la position de départ après réorganisation finale
-        next.forEach(c => {
-          c.startX = c.x;
-          c.startY = c.y;
-        });
+        next.forEach(c => { c.startX = c.x; c.startY = c.y; });
         resolve();
       } else requestAnimationFrame(stepAnim);
     }
@@ -379,7 +356,6 @@ function applyMortalityAndReproduction() {
     let survives = false;
     let reproduce = false;
 
-    //0=mort, 0.5=50% de chance de survie, 1=survie, 1.5=survie+50% de chance de repro, 2=repro
     if (c.food === 0) survives = false;
     else if (c.food === 0.5) survives = Math.random() < 0.5;
     else if (c.food === 1) survives = true;
@@ -393,48 +369,33 @@ function applyMortalityAndReproduction() {
 }
 
 /*********************************************************
- * STEP DAY COMPLET AVEC PAUSE SUR NOURRITURE
+ * STEP DAY
  *********************************************************/
 async function stepDay() {
   if (animating) return;
   animating = true;
   day++;
 
-  // Remise à zéro nourriture et régénération
   creatures.forEach(c => c.food = 0);
   generateFoodPairs();
   assignTargets();
 
-  // Animation vers nourriture
   await animateMove();
-
-  // Pause 1 seconde devant chaque paire
   await wait(1000);
-
-  // Manger
   foods.forEach(eatPair);
 
-  // Retour à leur position initiale
   creatures.forEach(c => c.target = { x: c.startX, y: c.startY });
   await animateMove();
 
-  // Mort & reproduction
   creatures = applyMortalityAndReproduction();
-
-  // Réorganisation finale
   await animateReposition(creatures);
 
-  creatures.forEach(c => {
-    if (c.species === Species.DETECTIVE) c.round++;
-  });
-  // Mise à jour du graphe
+  creatures.forEach(c => { if (c.species === Species.DETECTIVE) c.round++; });
   updateChart();
 
-  // **Arrêter la simulation si plus aucune créature**
   if (creatures.length === 0) {
     clearInterval(loop);
     loop = null;
-
     animating = false;
     return;
   }
@@ -470,14 +431,14 @@ function syncSliders() {
   hawksVal.textContent = hawksSlider.value.toString().padStart(2, '0');
   dovesVal.textContent = dovesSlider.value.toString().padStart(2, '0');
   grudgeVal.textContent = grudgeSlider.value.toString().padStart(2, '0');
-  detectiveVal.textContent = detectiveSlider.value.padStart(2,'0');
+  detectiveVal.textContent = detectiveSlider.value.toString().padStart(2,'0');
 
   initCreatures(+hawksSlider.value, +dovesSlider.value, +grudgeSlider.value, +detectiveSlider.value);
 }
 
 hawksSlider.oninput = dovesSlider.oninput = grudgeSlider.oninput = detectiveSlider.oninput = syncSliders;
 
-startBtn.onclick = () => loop ??= setInterval(stepDay, 3000);
+startBtn.onclick = () => { if (!loop) loop = setInterval(stepDay, 3000); };
 stopBtn.onclick = () => { clearInterval(loop); loop = null; };
 resetBtn.onclick = () => { stopBtn.onclick(); syncSliders(); };
 

@@ -5,52 +5,42 @@ import java.util.Set;
 
 public class Detective extends Creature {
 
-    private int round = 0;
-    private boolean someoneCheated = false;
-
-    // mémoire des comportements adverses
-    private Set<Creature> cheaters = new HashSet<>();
+    // Ensemble pour mémoriser les Doves exploitables
+    private Set<Creature> doveMemory = new HashSet<>();
 
     public Detective(Position p) {
         super(p);
     }
 
+    /**
+     * Le Detective est toujours de type DETECTIVE
+     */
     @Override
     public Species getSpecies() {
         return Species.DETECTIVE;
     }
 
     /**
-     * Détermine si le Detective se comporte comme Hawk
+     * Mémorise une Dove après interaction
      */
-    public boolean behavesAsHawkAgainst(Creature other) {
-
-        // Phase de test (4 premiers tours)
-        if (round == 0) return false; // Dove
-        if (round == 1) return true;  // Hawk
-        if (round == 2) return false; // Dove
-        if (round == 3) return false; // Dove
-
-        // Après analyse
-        if (!someoneCheated) {
-            return true; // Exploitation : Hawk toujours
+    public void rememberDove(Creature other) {
+        if (other.getSpecies() == Species.DOVE) {
+            doveMemory.add(other);
         }
-
-        // Copycat
-        return cheaters.contains(other);
     }
 
     /**
-     * Mémorise une triche adverse
+     * Le Detective se comporte comme Hawk
+     * uniquement face aux Doves mémorisées
      */
-    public void observe(Creature other, boolean otherBehavedAsHawk) {
-        if (otherBehavedAsHawk) {
-            someoneCheated = true;
-            cheaters.add(other);
-        }
+    public boolean behavesAsHawkAgainst(Creature other) {
+        return doveMemory.contains(other) && other.getSpecies() == Species.DOVE;
     }
 
-    public void nextRound() {
-        round++;
+    /**
+     * Retourne la mémoire (utile pour le moteur)
+     */
+    public Set<Creature> getDoveMemory() {
+        return doveMemory;
     }
 }

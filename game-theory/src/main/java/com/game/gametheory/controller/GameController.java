@@ -10,11 +10,8 @@ public class GameController {
   private GameEngine engine;
 
   /**
-   * Démarre une nouvelle partie avec hawks, doves et grudges.
+   * Démarre une nouvelle partie.
    *
-   * @param hawks  nombre de Hawks
-   * @param doves  nombre de Doves
-   * @param grudges nombre de Grudges
    */
   @PostMapping("/start")
   public void start(

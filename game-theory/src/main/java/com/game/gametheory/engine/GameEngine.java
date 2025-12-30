@@ -4,11 +4,13 @@ import com.game.gametheory.model.*;
 import java.util.*;
 
 public class GameEngine {
+
   public int day = 0;
   public Board board;
 
   public GameEngine(int h, int d, int g, int det) {
     board = new Board(280);
+
     for (int i = 0; i < h; i++) board.creatures.add(new Hawk(board.randomPosition()));
     for (int i = 0; i < d; i++) board.creatures.add(new Dove(board.randomPosition()));
     for (int i = 0; i < g; i++) board.creatures.add(new Grudge(board.randomPosition()));
@@ -22,47 +24,60 @@ public class GameEngine {
     for (Creature c : board.creatures) {
       c.resetFood();
 
-      // Simuler nourriture aléatoire
+      // Nourriture aléatoire (inchangé)
       double r = Math.random();
       if (r < 0.33) c.addFood(2);
       else if (r < 0.66) c.addFood(1);
       else c.addFood(0.5);
 
-      // Gérer rancunier qui se fait arnaquer par Hawk
-      if (c instanceof Grudge) {
-        for (Creature other : board.creatures) {
-          if (other.getSpecies() == Species.HAWK && c.getFood() < 1) {
+      // ===== INTERACTIONS MÉMOIRE =====
+
+      for (Creature other : board.creatures) {
+        if (other == c) continue;
+
+        // --- Grudge : mémorise ceux qui se comportent comme Hawk ---
+        if (c instanceof Grudge) {
+          boolean otherBehavedAsHawk =
+                  other.getSpecies() == Species.HAWK
+                          || (other instanceof Grudge
+                          && ((Grudge) other).behavesAsHawkAgainst(c))
+                          || (other instanceof Detective
+                          && ((Detective) other).behavesAsHawkAgainst(c));
+
+          if (otherBehavedAsHawk) {
             ((Grudge) c).rememberHawk(other);
+          }
+        }
+
+        // --- Detective : mémorise ceux qui se comportent comme Dove ---
+        if (c instanceof Detective) {
+          boolean otherBehavedAsDove =
+                  other.getSpecies() == Species.DOVE
+                          || (other instanceof Detective
+                          && !((Detective) other).behavesAsHawkAgainst(c))
+                          || (other instanceof Grudge
+                          && !((Grudge) other).behavesAsHawkAgainst(c));
+
+          if (otherBehavedAsDove) {
+            ((Detective) c).rememberDove(other);
           }
         }
       }
 
-      // Gestion Detective
-      if (c instanceof Detective) {
-        Detective det = (Detective) c;
-
-        for (Creature other : board.creatures) {
-          if (other == c) continue;
-
-          boolean otherIsHawk = other.getSpecies() == Species.HAWK
-                  || (other instanceof Grudge && ((Grudge) other).behavesAsHawkAgainst(c));
-
-          det.observe(other, otherIsHawk);
-        }
-
-        det.nextRound();
-      }
-
-      // Vérifier survie
+      // ===== SURVIE =====
       if (c.survives()) {
         next.add(c);
 
-        // Vérifier reproduction
+        // ===== REPRODUCTION =====
         if (c.reproduces()) {
-          if (c.getSpecies() == Species.HAWK) next.add(new Hawk(board.randomPosition()));
-          else if (c.getSpecies() == Species.DOVE) next.add(new Dove(board.randomPosition()));
-          else if (c.getSpecies() == Species.GRUDGE) next.add(new Grudge(board.randomPosition()));
-          else if (c.getSpecies() == Species.DETECTIVE) next.add(new Detective(board.randomPosition()));
+          if (c.getSpecies() == Species.HAWK)
+            next.add(new Hawk(board.randomPosition()));
+          else if (c.getSpecies() == Species.DOVE)
+            next.add(new Dove(board.randomPosition()));
+          else if (c.getSpecies() == Species.GRUDGE)
+            next.add(new Grudge(board.randomPosition()));
+          else if (c.getSpecies() == Species.DETECTIVE)
+            next.add(new Detective(board.randomPosition()));
         }
       }
     }

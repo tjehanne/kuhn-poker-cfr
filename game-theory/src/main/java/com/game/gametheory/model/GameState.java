@@ -5,13 +5,15 @@ public class GameState {
     private int day;
     private int hawks;
     private int doves;
-    private int grudges; // Nouveau
+    private int grudges;
+    private int detectives;
 
-    public GameState(int day, int hawks, int doves, int grudges) {
+    public GameState(int day, int hawks, int doves, int grudges, int detectives) {
         this.day = day;
         this.hawks = hawks;
         this.doves = doves;
         this.grudges = grudges;
+        this.detectives = detectives;
     }
 
     public int getDay() {
@@ -28,5 +30,9 @@ public class GameState {
 
     public int getGrudges() {
         return grudges;
+    }
+
+    public int getDetectives() {
+        return detectives;
     }
 }
