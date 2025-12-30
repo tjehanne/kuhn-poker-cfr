@@ -15,7 +15,7 @@
         <a href="/index.html" class="active">Accueil</a>
         <a href="/HK/hawk-dove.html">Hawk–Dove</a>
         <a href="/RPS/rps.html">Rock–Paper–Scissors</a>
-        <a href="/rules.html">Probas</a>
+        <a href="/rules.html">Tableaux des gains</a>
     </div>
 </nav>
 
@@ -76,9 +76,9 @@
         data: {
             labels: [1,2,3,4,5,6,7],
             datasets: [
-                { label: 'Rock', data: [5,6,5,7,6,5,6], borderColor: '#666', fill: false },
-                { label: 'Paper', data: [5,4,6,5,5,6,5], borderColor: '#999', fill: false },
-                { label: 'Scissors', data: [5,5,5,4,5,5,5], borderColor: '#333', fill: false }
+                { label: 'Rock', data: [5,6,5,7,6,5,6], borderColor: 'red', fill: false },      // <-- rouge
+                { label: 'Paper', data: [5,4,6,5,5,6,5], borderColor: 'blue', fill: false },    // <-- bleu
+                { label: 'Scissors', data: [5,5,5,4,5,5,5], borderColor: 'green', fill: false } // <-- vert
             ]
         },
         options: { responsive: true, plugins: { legend: { position: 'top' } } }
