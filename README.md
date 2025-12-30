@@ -112,8 +112,12 @@ Chaque jour les créatures se dirigent aléatoirement vers une paire de nourritu
 - Hawk/Hawk: 1 nourriture mais perte d'énergie à se battre, résultat 0 nourriture
 - Hawk/Dove: 0.5 nourriture pour Dove, 1.5 pour Hawk
 
+Les Grudge et les Detectives agissent de manière alernative:
+- un Grudge agit comme dove lors d'une première rencontre et enregistre l'id de la créature en face si celle-ci s'est comporté en Hawks afin de se comporter lui aussi en Hawks si jamais ils se recroisent
+- un Detective agit comme dove lors d'une première rencontre et enregistre l'id de la créature en face si celle-ci s'est comporté en Dove afin de se comporter en Hawks si jamais ils se recroisent
+
 À la fin de la journée les créatures:
-- meurt si elles ont eu 0 nourriture
+- meurts si elles ont eu 0 nourriture
 - on 50% de chance de survie si elles ont eu 0.5 nourriture
 - survivent si elles ont eu 1 nourriture
 - on 50% de chance de se reproduire si elles ont eu 1.5 nourriture
