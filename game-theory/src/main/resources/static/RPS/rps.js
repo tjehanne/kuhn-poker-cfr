@@ -112,7 +112,7 @@ function initPlayers(rock, paper, scissor) {
 }
 
 /*********************************************************
- * DESSIN (zones fixes selon config initiale)
+ * DESSIN
  *********************************************************/
 function draw() {
     ctx.clearRect(0, 0, board.width, board.height);
@@ -161,7 +161,7 @@ function draw() {
 }
 
 /*********************************************************
- * ANIMATION
+ * DEBUT DE TOUR
  *********************************************************/
 function animateMove(arr, speed=5){
     return new Promise(resolve=>{
@@ -204,7 +204,7 @@ function applyRPS(a,b){
 }
 
 /*********************************************************
- * STEP DAY
+ * FIN DE TOUR
  *********************************************************/
 async function stepDay() {
     if (animating) return;
