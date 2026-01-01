@@ -8,113 +8,216 @@ from PIL import Image
 import pandas as pd
 import numpy as np
 import string
+import time
+
+# Import de l'architecture partagée
+# On essaye l'import local (si lancé depuis backend/) ou relatif
+try:
+    from architecture import CRNN
+except ImportError:
+    from backend.architecture import CRNN
 
 # Configuration
-DATA_DIR = "../data/images"
-TRAIN_CSV = "../data/train.csv"
+# On se base sur le fait qu'on lance le script depuis le dossier 3_4_captcha/ ou backend/
+if os.path.exists("data"):
+    DATA_ROOT = "data"
+elif os.path.exists("../data"):
+    DATA_ROOT = "../data"
+else:
+    raise FileNotFoundError("Dossier data introuvable")
+
+IMAGES_DIR = os.path.join(DATA_ROOT, "images")
+TRAIN_CSV = os.path.join(DATA_ROOT, "train.csv")
+VAL_CSV = os.path.join(DATA_ROOT, "val.csv")
+MODEL_SAVE_PATH = "model.pth" if os.path.exists("model.pth") else "backend/model.pth"
+if not os.path.exists(os.path.dirname(MODEL_SAVE_PATH)) and os.path.dirname(MODEL_SAVE_PATH) != "":
+    # Fallback si on est dans 3_4_captcha/
+    MODEL_SAVE_PATH = "backend/model.pth"
+
 IMG_WIDTH = 200
-IMG_HEIGHT = 64 # Standard 64 ou 32
-BATCH_SIZE = 32
+IMG_HEIGHT = 64
+BATCH_SIZE = 64
+LEARNING_RATE = 0.001
+EPOCHS = 30
 ALPHABET = string.ascii_uppercase
+
+# Mapping caractères <-> index
+# CTC Blank est souvent 0. Donc A=1, B=2, ...
 CHAR2IDX = {char: idx + 1 for idx, char in enumerate(ALPHABET)}
 IDX2CHAR = {idx + 1: char for idx, char in enumerate(ALPHABET)}
 
 class CaptchaDataset(Dataset):
     def __init__(self, csv_file, root_dir, transform=None):
-        self.annotations = pd.read_csv(csv_file)
+        self.data = pd.read_csv(csv_file)
         self.root_dir = root_dir
         self.transform = transform
-    def __len__(self): return len(self.annotations)
-    def __getitem__(self, index):
-        img_name = self.annotations.iloc[index]['filename']
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        row = self.data.iloc[idx]
+        img_name = row['filename']
+        label_str = row['Label']
+        
         img_path = os.path.join(self.root_dir, img_name)
         try:
+            # Ouverture en niveau de gris (L)
             image = Image.open(img_path).convert("L")
-        except:
-             image = Image.new('L', (IMG_WIDTH, IMG_HEIGHT))
-        label_str = self.annotations.iloc[index]['Label']
-        if self.transform: image = self.transform(image)
+        except Exception as e:
+            print(f"Erreur chargement image {img_path}: {e}")
+            # Image noire en fallback
+            image = Image.new('L', (IMG_WIDTH, IMG_HEIGHT))
+            
+        if self.transform:
+            image = self.transform(image)
+            
+        # Encodage du label
         label = torch.tensor([CHAR2IDX[c] for c in label_str if c in CHAR2IDX], dtype=torch.long)
         return image, label
 
-# Architecture VGG-Style simple pour CRNN
-class CRNN(nn.Module):
-    def __init__(self, num_chars, hidden_size=256):
-        super(CRNN, self).__init__()
-        # Input: 1 x 64 x 200
-        self.cnn = nn.Sequential(
-            nn.Conv2d(1, 64, 3, 1, 1), nn.ReLU(), nn.MaxPool2d(2, 2), # -> 64 x 32 x 100
-            nn.Conv2d(64, 128, 3, 1, 1), nn.ReLU(), nn.MaxPool2d(2, 2), # -> 128 x 16 x 50
-            nn.Conv2d(128, 256, 3, 1, 1), nn.BatchNorm2d(256), nn.ReLU(), # -> 256 x 16 x 50
-            nn.Conv2d(256, 256, 3, 1, 1), nn.ReLU(), nn.MaxPool2d((2, 1)), # -> 256 x 8 x 50
-            nn.Conv2d(256, 512, 3, 1, 1), nn.BatchNorm2d(512), nn.ReLU(), # -> 512 x 8 x 50
-            nn.Conv2d(512, 512, 3, 1, 1), nn.ReLU(), nn.MaxPool2d((2, 1)), # -> 512 x 4 x 50
-            nn.Conv2d(512, 512, 2, 1, 0), nn.BatchNorm2d(512), nn.ReLU() # -> 512 x 3 x 49
-        )
-        self.rnn = nn.LSTM(512 * 3, hidden_size, bidirectional=True, batch_first=True, num_layers=2)
-        self.output = nn.Linear(hidden_size * 2, num_chars + 1)
-
-    def forward(self, x):
-        features = self.cnn(x)
-        b, c, h, w = features.size()
-        # [Batch, C, H, W] -> [Batch, W, C*H]
-        features = features.permute(0, 3, 1, 2).reshape(b, w, c * h)
-        output, _ = self.rnn(features)
-        return self.output(output).log_softmax(2)
-
 def collate_fn(batch):
     images, labels = zip(*batch)
-    images = torch.stack(images, 0)
+    images = torch.stack(images, 0) # [Batch, 1, H, W]
+    
+    # Pour CTC Loss, on a besoin des targets concaténées et de leurs longueurs
     target_lengths = torch.tensor([len(t) for t in labels], dtype=torch.long)
     targets = torch.cat(labels)
+    
     return images, targets, target_lengths
 
-def decode(preds):
-    preds = preds.argmax(dim=2).detach().cpu().numpy()
-    decoded = []
-    for p in preds:
-        text = ""
-        for i in range(len(p)):
-            char_idx = int(p[i])
-            if char_idx != 0 and (i == 0 or char_idx != int(p[i-1])): text += IDX2CHAR.get(char_idx, "")
-        decoded.append(text)
-    return decoded
+def train_epoch(model, loader, criterion, optimizer, device):
+    model.train()
+    total_loss = 0
+    
+    for batch_idx, (images, targets, target_lengths) in enumerate(loader):
+        images = images.to(device)
+        targets = targets.to(device)
+        target_lengths = target_lengths.to(device)
+        
+        optimizer.zero_grad()
+        
+        # Forward
+        # Output du modèle: [Batch, TimeSteps, NumClasses] (LogSoftmaxed)
+        preds = model(images)
+        
+        # CTC Loss attend [TimeSteps, Batch, NumClasses]
+        preds_permuted = preds.permute(1, 0, 2)
+        
+        # Input lengths : tous egaux à la largeur temporelle de sortie du CNN/RNN
+        # Ici c'est 50 (cf architecture.py: W // 4 = 200 // 4 = 50)
+        # Mais on récupère dynamiquement
+        input_lengths = torch.full(size=(images.size(0),), fill_value=preds.size(1), dtype=torch.long).to(device)
+        
+        loss = criterion(preds_permuted, targets, input_lengths, target_lengths)
+        
+        loss.backward()
+        # Clip gradients pour éviter l'explosion (typique RNN)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+        optimizer.step()
+        
+        total_loss += loss.item()
+        
+    return total_loss / len(loader)
 
-def train():
+def val_epoch(model, loader, criterion, device):
+    model.eval()
+    total_loss = 0
+    with torch.no_grad():
+        for images, targets, target_lengths in loader:
+            images = images.to(device)
+            targets = targets.to(device)
+            target_lengths = target_lengths.to(device)
+            
+            preds = model(images)
+            preds_permuted = preds.permute(1, 0, 2)
+            input_lengths = torch.full(size=(images.size(0),), fill_value=preds.size(1), dtype=torch.long).to(device)
+            
+            loss = criterion(preds_permuted, targets, input_lengths, target_lengths)
+            total_loss += loss.item()
+    return total_loss / len(loader)
+
+def decode_prediction(preds):
+    # preds: [TimeSteps, NumClasses] or [Batch, TimeSteps, NumClasses]
+    # Simple Greedy Decoder
+    if preds.dim() == 3:
+        preds = preds.argmax(dim=2) # [Batch, TimeSteps]
+    
+    decoded_batch = []
+    for p in preds:
+        p = p.cpu().numpy()
+        decoded_str = ""
+        for i in range(len(p)):
+            if p[i] != 0 and (i == 0 or p[i] != p[i-1]):
+                decoded_str += IDX2CHAR.get(p[i], "")
+        decoded_batch.append(decoded_str)
+    return decoded_batch
+
+def main():
+    print("Initialisation de l'entraînement...")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+    print(f"Device: {device}")
+    
+    # Transforms
     transform = transforms.Compose([
         transforms.Resize((IMG_HEIGHT, IMG_WIDTH)),
         transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,))
+        transforms.Normalize((0.5,), (0.5,)) # [-1, 1]
     ])
-    train_dataset = CaptchaDataset(csv_file=TRAIN_CSV, root_dir=DATA_DIR, transform=transform)
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
-
-    model = CRNN(num_chars=len(ALPHABET))
-    device = torch.device("cpu")
-    model.to(device)
-    criterion = nn.CTCLoss(blank=0, zero_infinity=True)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-    print("--- CRASH TEST NOUVELLE ARCHI (100 iters sur 1 batch) ---")
-    single_batch = next(iter(train_loader))
-    img, tgt, tgt_len = single_batch
     
-    for i in range(101):
-        optimizer.zero_grad()
-        preds = model(img)
-        preds_p = preds.permute(1, 0, 2)
-        input_len = torch.full(size=(img.size(0),), fill_value=preds.size(1), dtype=torch.long)
-        loss = criterion(preds_p, tgt, input_len, tgt_len)
-        loss.backward()
-        optimizer.step()
+    # Datasets
+    train_dataset = CaptchaDataset(TRAIN_CSV, IMAGES_DIR, transform=transform)
+    val_dataset = CaptchaDataset(VAL_CSV, IMAGES_DIR, transform=transform)
+    
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn)
+    
+    # Model
+    model = CRNN(num_chars=len(ALPHABET), hidden_size=256)
+    model.to(device)
+    
+    # Loss & Optimizer
+    # blank=0 car on a mappé les charactères à partir de 1
+    criterion = nn.CTCLoss(blank=0, zero_infinity=True)
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3, factor=0.5)
+    
+    best_val_loss = float('inf')
+    
+    print(f"Début de l'entraînement pour {EPOCHS} époques.")
+    
+    for epoch in range(EPOCHS):
+        start_time = time.time()
+        train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
+        val_loss = val_epoch(model, val_loader, criterion, device)
         
-        if i % 20 == 0:
-            d = decode(preds)[0]
-            print(f"Iter {i} | Loss: {loss.item():.4f} | Pred: {d}")
-
-    # Si ça a marché, on sauvegarde pour que main.py puisse l'utiliser
-    torch.save(model.state_dict(), "model.pth")
-    print("Modèle sauvegardé (version crash test).")
+        scheduler.step(val_loss)
+        
+        duration = time.time() - start_time
+        print(f"Epoch {epoch+1}/{EPOCHS} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Time: {duration:.1f}s")
+        
+        # Test visuel rapide sur le premier batch de validation
+        if (epoch + 1) % 5 == 0:
+            model.eval()
+            with torch.no_grad():
+                imgs, _, _ = next(iter(val_loader))
+                imgs = imgs.to(device)
+                preds = model(imgs)
+                decoded = decode_prediction(preds)
+                print(f"  Exemple Pred: {decoded[0]}")
+        
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            # Sauvegarde du state dict uniquement
+            torch.save(model.state_dict(), MODEL_SAVE_PATH)
+            print(f"  -> Modèle sauvegardé dans {MODEL_SAVE_PATH}")
+            
+    print("Entraînement terminé.")
 
 if __name__ == "__main__":
-    train()
+    main()

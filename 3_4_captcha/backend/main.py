@@ -9,31 +9,15 @@ import io
 import os
 import pandas as pd
 import random
+import string
 from captcha.image import ImageCaptcha 
 
-# Architecture VGG-Style (Copie de train_model.py)
-class CRNN(nn.Module):
-    def __init__(self, num_chars, hidden_size=256):
-        super(CRNN, self).__init__()
-        # Input: 1 x 64 x 200
-        self.cnn = nn.Sequential(
-            nn.Conv2d(1, 64, 3, 1, 1), nn.ReLU(), nn.MaxPool2d(2, 2), # -> 64 x 32 x 100
-            nn.Conv2d(64, 128, 3, 1, 1), nn.ReLU(), nn.MaxPool2d(2, 2), # -> 128 x 16 x 50
-            nn.Conv2d(128, 256, 3, 1, 1), nn.BatchNorm2d(256), nn.ReLU(), 
-            nn.Conv2d(256, 256, 3, 1, 1), nn.ReLU(), nn.MaxPool2d((2, 1)), # -> 256 x 8 x 50
-            nn.Conv2d(256, 512, 3, 1, 1), nn.BatchNorm2d(512), nn.ReLU(), 
-            nn.Conv2d(512, 512, 3, 1, 1), nn.ReLU(), nn.MaxPool2d((2, 1)), # -> 512 x 4 x 50
-            nn.Conv2d(512, 512, 2, 1, 0), nn.BatchNorm2d(512), nn.ReLU() # -> 512 x 3 x 49
-        )
-        self.rnn = nn.LSTM(512 * 3, hidden_size, bidirectional=True, batch_first=True, num_layers=2)
-        self.output = nn.Linear(hidden_size * 2, num_chars + 1)
-
-    def forward(self, x):
-        features = self.cnn(x)
-        b, c, h, w = features.size()
-        features = features.permute(0, 3, 1, 2).reshape(b, w, c * h)
-        output, _ = self.rnn(features)
-        return self.output(output).log_softmax(2)
+# Import relatif supposant l'exécution via 'uvicorn backend.main:app'
+try:
+    from .architecture import CRNN
+except ImportError:
+    # Fallback pour exécution directe ou debug
+    from architecture import CRNN
 
 app = FastAPI()
 
@@ -46,24 +30,43 @@ app.add_middleware(
     expose_headers=["X-True-Label", "X-Prediction"],
 )
 
-MODEL_PATH = "model.pth"
-DATA_DIR = "../data/images" 
-VAL_CSV = "../data/val.csv"
+# Configuration des chemins (Supposant execution depuis 3_4_captcha/)
+BASE_DIR = os.getcwd()
+MODEL_PATH = os.path.join(BASE_DIR, "backend/model.pth")
+if not os.path.exists(MODEL_PATH):
+    # Fallback si on est dans backend/
+    MODEL_PATH = "model.pth"
+
+DATA_DIR = os.path.join(BASE_DIR, "data/images")
+VAL_CSV = os.path.join(BASE_DIR, "data/val.csv")
+
 IMG_WIDTH = 200
-IMG_HEIGHT = 64 # UPDATED
-ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+IMG_HEIGHT = 64
+ALPHABET = string.ascii_uppercase
 IDX2CHAR = {idx + 1: char for idx, char in enumerate(ALPHABET)}
 
-device = torch.device("cpu")
+# Device Selection
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")
+else:
+    device = torch.device("cpu")
+
+print(f"API Device: {device}")
+
+# Load Model
 model = CRNN(num_chars=len(ALPHABET))
 if os.path.exists(MODEL_PATH):
     try:
-        model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
-        print("Modèle chargé.")
-    except:
-        print("Erreur chargement modèle (architecture incompatible ?)")
+        # map_location is important if trained on MPS/GPU but loaded on CPU or vice versa
+        model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
+        print(f"Modèle chargé avec succès depuis {MODEL_PATH}")
+    except Exception as e:
+        print(f"Erreur chargement modèle: {e}")
 else:
-    print("Modèle non trouvé.")
+    print(f"ATTENTION: Modèle non trouvé à {MODEL_PATH}")
+
 model.to(device)
 model.eval()
 
@@ -74,6 +77,7 @@ transform = transforms.Compose([
 ])
 
 def decode_prediction(preds):
+    # preds: [1, TimeSteps, NumClasses]
     preds = preds.argmax(dim=2).detach().cpu().numpy()
     decoded_texts = []
     for p in preds:
@@ -90,8 +94,10 @@ async def predict(file: UploadFile = File(...)):
     image_data = await file.read()
     image = Image.open(io.BytesIO(image_data)).convert("L")
     img_tensor = transform(image).unsqueeze(0).to(device)
+    
     with torch.no_grad():
         output = model(img_tensor)
+    
     text = decode_prediction(output)[0]
     return {"prediction": text}
 
@@ -99,16 +105,46 @@ async def predict(file: UploadFile = File(...)):
 def get_test_sample():
     if not os.path.exists(VAL_CSV):
         return {"error": "Validation set not found"}
-    df = pd.read_csv(VAL_CSV)
+    
+    # Check paths
+    actual_val_csv = VAL_CSV
+    actual_data_dir = DATA_DIR
+    
+    if not os.path.exists(actual_val_csv):
+         # Try fallback paths relative to file
+         actual_val_csv = "../data/val.csv"
+         actual_data_dir = "../data/images"
+
+    try:
+        df = pd.read_csv(actual_val_csv)
+    except:
+        return {"error": "Could not read CSV"}
+
     if len(df) == 0:
         return {"error": "Validation set empty"}
+    
     random_row = df.sample(1).iloc[0]
     img_name = random_row['filename']
     true_label = random_row['Label']
-    img_path = os.path.join(DATA_DIR, img_name)
+    img_path = os.path.join(actual_data_dir, img_name)
+    
     if not os.path.exists(img_path):
-        return {"error": f"Image {img_name} not found"}
-    return FileResponse(img_path, headers={"X-True-Label": true_label})
+        return {"error": f"Image {img_name} not found at {img_path}"}
+    
+    # Predict on this sample
+    try:
+        image = Image.open(img_path).convert("L")
+        img_tensor = transform(image).unsqueeze(0).to(device)
+        with torch.no_grad():
+            output = model(img_tensor)
+        prediction = decode_prediction(output)[0]
+    except Exception as e:
+        prediction = f"Error: {e}"
+
+    return FileResponse(img_path, headers={
+        "X-True-Label": true_label,
+        "X-Prediction": prediction
+    })
 
 @app.post("/generate-custom")
 async def generate_custom(text: str = Form(...)):
@@ -135,4 +171,4 @@ async def generate_custom(text: str = Form(...)):
 
 @app.get("/")
 def read_root():
-    return {"message": "Captcha Solver API Ready (VGG Style)"}
+    return {"message": "Captcha Solver API Ready (CRNN + CTC)"}
