@@ -89,10 +89,10 @@ Ou via Maven :
 - mvn spring-boot:run
 
 Accéder au frontend :
-- Page d'accueil: http://localhost:8080/index.html
+- Page d'accueil: http://localhost:8080/accueil.html
 - Simulation Hawks-Dove: http://localhost:8080/HK/hawk-dove.html
 - Simulation Rock-Paper-Scissor: http://localhost:8080/RPS/rps.html
-- Tableaux des gains: http://localhost:8080/rules.html
+- Tableaux des gains: http://localhost:8080/gains.html
 
 ## Simulation Hawks-Dove
 
@@ -141,7 +141,7 @@ Les boutons :
 
 # LOGIQUE DE SIMULATION
 
-Chaque jour les joeurs se dirigent aléatoirement vers un point de rencontre:
+Chaque jour les joueurs se dirigent aléatoirement vers un point de rencontre:
 - Scissor bas Paper
 - Paper bas Rock
 - Rock bas Scissor
