@@ -11,7 +11,7 @@ public class GameController {
 
   /**
    * Démarre une nouvelle partie.
-   *
+   * paramètres reçus : hawks; doves; grudges (option);detectives(option)
    */
   @PostMapping("/start")
   public void start(
@@ -24,7 +24,6 @@ public class GameController {
 
   /**
    * Avance la simulation d'un jour.
-   *
    * @return snapshot de l'état du jeu
    */
   @GetMapping("/step")

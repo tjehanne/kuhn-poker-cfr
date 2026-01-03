@@ -9,7 +9,7 @@ public class GameEngine {
   public Board board;
 
   public GameEngine(int h, int d, int g, int det) {
-    board = new Board(280);
+    board = new Board(280); //initialisation avec les populations initiales
 
     for (int i = 0; i < h; i++) board.creatures.add(new Hawk(board.randomPosition()));
     for (int i = 0; i < d; i++) board.creatures.add(new Dove(board.randomPosition()));
@@ -17,7 +17,7 @@ public class GameEngine {
     for (int i = 0; i < det; i++) board.creatures.add(new Detective(board.randomPosition()));
   }
 
-  public GameSnapshot nextDay() {
+  public GameSnapshot nextDay() { //retourne un snapshot du jeu (simulation jour+1)
     day++;
     List<Creature> next = new ArrayList<>();
 
@@ -32,10 +32,10 @@ public class GameEngine {
 
       // ===== INTERACTIONS MÉMOIRE =====
 
-      for (Creature other : board.creatures) {
+      for (Creature other : board.creatures) { //chaque créature obseve les autres
         if (other == c) continue;
 
-        // --- Grudge : mémorise ceux qui se comportent comme Hawk ---
+        // Grudge : mémorise ceux qui se comportent comme Hawk
         if (c instanceof Grudge) {
           boolean otherBehavedAsHawk =
                   other.getSpecies() == Species.HAWK
@@ -49,7 +49,7 @@ public class GameEngine {
           }
         }
 
-        // --- Detective : mémorise ceux qui se comportent comme Dove ---
+        // Detective : mémorise ceux qui se comportent comme Dove
         if (c instanceof Detective) {
           boolean otherBehavedAsDove =
                   other.getSpecies() == Species.DOVE
@@ -83,6 +83,6 @@ public class GameEngine {
     }
 
     board.creatures = next;
-    return GameSnapshot.from(board.creatures, day);
+    return GameSnapshot.from(board.creatures, day); //retourne l'état du jeu (snapshot)
   }
 }
