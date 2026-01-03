@@ -26,8 +26,11 @@ def simulate_match(home, away, n=10000):
 
     return {
         "home_win": (gh > ga).mean(),
+        "Odds_home_win": 1/(gh > ga).mean(),
         "draw": (gh == ga).mean(),
+        "Odds_draw": 1/(gh == ga).mean(),
         "away_win": (gh < ga).mean()
+        ,"Odds_away_win": 1/(gh < ga).mean(),
     }
 
-print(simulate_match("Arsenal", "Liverpool"))
+print(simulate_match("Man United", "Chelsea"))
