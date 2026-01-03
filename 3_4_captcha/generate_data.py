@@ -10,7 +10,7 @@ DATA_ROOT = "data"
 OUTPUT_DIR = os.path.join(DATA_ROOT, "images")
 CSV_FILE = os.path.join(DATA_ROOT, "dataset.csv")
 ALPHABET = string.ascii_uppercase
-WIDTH = 200
+WIDTH = 220
 HEIGHT = 64
 NUM_IMAGES = 8000  # 5000 images simples
 
@@ -18,7 +18,11 @@ NUM_IMAGES = 8000  # 5000 images simples
 captcha: ImageCaptcha = ImageCaptcha(
     width=WIDTH,
     height=HEIGHT,
-    fonts=["./fonts/NotoSans-Regular.ttf", "./fonts/AdwaitaSans-Regular.ttf"],
+    fonts=[
+        "./fonts/NotoSans-Regular.ttf",
+        "./fonts/AdwaitaSans-Regular.ttf",
+        "./fonts/Hack-Regular.ttf",
+    ],
     font_sizes=(30, 40, 50),  # NOQA: Type hint was done wrong
 )
 
@@ -28,6 +32,11 @@ if not os.path.exists(OUTPUT_DIR):
 
 def generate_random_text(length=6) -> str:
     return "".join(random.choices(ALPHABET, k=length))
+
+
+def generate_random_length_text() -> str:
+    text_length: int = random.randint(a=4, b=8)
+    return "".join(random.choices(ALPHABET, k=text_length))
 
 
 def generate_dataset():
@@ -45,6 +54,7 @@ def generate_dataset():
     if not os.listdir(OUTPUT_DIR):
         for i in range(NUM_IMAGES):
             text = generate_random_text()
+            text = generate_random_length_text()
             filename = f"{i}.png"
             filepath = f"{OUTPUT_DIR}/{filename}"
             data.append([filename, text])
