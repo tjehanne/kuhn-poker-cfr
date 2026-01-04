@@ -146,15 +146,51 @@
 
       <div class="multi-tests-section">
         <label for="testCount">Nombre de tests : </label>
-        <input type="number" id="testCount" value="5" min="1" max="20" style="width: 60px; margin-right: 10px; padding: 5px;">
+        <input
+          type="number"
+          id="testCount"
+          value="5"
+          min="1"
+          max="20"
+          style="width: 60px; margin-right: 10px; padding: 5px"
+        />
         <button onclick="runMultiTests()">Lancer une serie de tests</button>
-        <table id="multi-tests-table" class="tests-table" style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <table
+          id="multi-tests-table"
+          class="tests-table"
+          style="width: 100%; border-collapse: collapse; margin-top: 20px"
+        >
           <tr>
-            <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Image</th>
-            <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Vrai Texte</th>
-            <th style="border: 1px solid #ddd; padding: 8px; background-color: #f2f2f2;">Prediction</th>
+            <th
+              style="
+                border: 1px solid #ddd;
+                padding: 8px;
+                background-color: #f2f2f2;
+              "
+            >
+              Image
+            </th>
+            <th
+              style="
+                border: 1px solid #ddd;
+                padding: 8px;
+                background-color: #f2f2f2;
+              "
+            >
+              Vrai Texte
+            </th>
+            <th
+              style="
+                border: 1px solid #ddd;
+                padding: 8px;
+                background-color: #f2f2f2;
+              "
+            >
+              Prediction
+            </th>
           </tr>
         </table>
+        <div id="stats-counter" style="margin-top: 15px; font-weight: bold; text-align: center;"></div>
       </div>
     </div>
 
@@ -165,12 +201,12 @@
         const countInput = document.getElementById("testCount");
         const count = countInput.value || 5;
         const table = document.getElementById("multi-tests-table");
-        
+
         // Clear previous results (keep header)
         while (table.rows.length > 1) {
           table.deleteRow(1);
         }
-        
+
         // Add loading row
         const loadingRow = table.insertRow();
         const loadingCell = loadingRow.insertCell();
@@ -181,15 +217,18 @@
         try {
           const response = await fetch(`${API_URL}/test-batch?n=${count}`);
           if (!response.ok) throw new Error("Erreur serveur");
-          
+
           const results = await response.json();
-          
+
           // Remove loading row
           table.deleteRow(1);
-          
-          results.forEach(item => {
+
+          let correctCount = 0;
+          let totalCount = results.length;
+
+          results.forEach((item) => {
             const row = table.insertRow();
-            
+
             // Image Cell
             const imgCell = row.insertCell();
             imgCell.style.border = "1px solid #ddd";
@@ -199,36 +238,45 @@
             img.src = item.image;
             img.style.maxHeight = "50px";
             imgCell.appendChild(img);
-            
+
             // True Label Cell
             const trueCell = row.insertCell();
             trueCell.textContent = item.true_label;
             trueCell.style.border = "1px solid #ddd";
             trueCell.style.padding = "8px";
             trueCell.style.textAlign = "center";
-            
+
             // Prediction Cell
             const predCell = row.insertCell();
             predCell.textContent = item.prediction;
             predCell.style.border = "1px solid #ddd";
             predCell.style.padding = "8px";
             predCell.style.textAlign = "center";
-            
+
             // Highlight if correct
             if (item.prediction === item.true_label) {
-                predCell.style.backgroundColor = "#e8f5e9"; // Greenish
-                predCell.style.color = "#2e7d32";
+              predCell.style.backgroundColor = "#e8f5e9"; // Greenish
+              predCell.style.color = "#2e7d32";
+              correctCount++;
             } else {
-                predCell.style.backgroundColor = "#ffebee"; // Reddish
-                predCell.style.color = "#c62828";
+              predCell.style.backgroundColor = "#ffebee"; // Reddish
+              predCell.style.color = "#c62828";
             }
           });
-          
+
+          // Update stats counter
+          const statsDiv = document.getElementById("stats-counter");
+          const accuracy = totalCount > 0 ? ((correctCount / totalCount) * 100).toFixed(2) : 0;
+          statsDiv.innerHTML = `Précision : ${correctCount} / ${totalCount} (${accuracy}%)`;
+
         } catch (error) {
           console.error(error);
           // Remove loading row if still there
-          if (table.rows.length > 1 && table.rows[1].cells[0].textContent === "Chargement en cours...") {
-              table.deleteRow(1);
+          if (
+            table.rows.length > 1 &&
+            table.rows[1].cells[0].textContent === "Chargement en cours..."
+          ) {
+            table.deleteRow(1);
           }
           alert("Erreur lors de la série de tests");
         }
