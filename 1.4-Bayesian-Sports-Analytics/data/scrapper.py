@@ -94,6 +94,8 @@ def main():
     
     # Définir les saisons (format: code_url: nom_lisible)
     saisons = {
+        '2526': '2025-26',
+        '2425': '2024-25',
         '2324': '2023-24',
         '2223': '2022-23',
         '2122': '2021-22',
